@@ -7,20 +7,36 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.0", "8.3"]
     steps:
-      - uses: actions/checkout@v3
-      - uses: php-actions/composer@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          php_extensions: intl
+          persist-credentials: false
+      - name: Set up the supported PHP runtimes
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: intl, curl, mbstring, dom, xml, xmlwriter
+          tools: composer:v2
+          coverage: none
+      - name: Validate and install the locked tree
+        run: |
+          composer validate --no-check-publish
+          composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins
+          composer check-platform-reqs
+      - name: Audit the locked dependencies
+        run: composer audit --locked
       - name: PHPUnit Tests
-        uses: php-actions/phpunit@v3
-        with:
-          php_extensions: intl
-          bootstrap: vendor/autoload.php
-          configuration: tests/phpunit/phpunit.xml
-          args: --testdox
+        run: vendor/bin/phpunit --bootstrap vendor/autoload.php --configuration tests/phpunit/phpunit.xml --testdox
         env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ github.token }}
